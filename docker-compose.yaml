@@ -45,7 +45,7 @@ services:
       - mongoCluster
     entrypoint: >
       bash -c "
-        sleep 15;  # לתת זמן לקונטיינרים של MongoDB לעלות
+        sleep 30;  # להוסיף יותר זמן המתנה
         mongosh --host mongo1:27017 --eval '
           rs.initiate({
             _id: \"myReplicaSet\",
@@ -76,6 +76,22 @@ services:
     volumes:
       - $HOME/.aws:/root/.aws
       - ./yolo5:/usr/src/app/yolo5
+
+  polybot:
+    image: liranmil/polybot:latest
+    container_name: polybot
+    depends_on:
+      - mongo1
+      - mongo2
+      - mongo3
+    networks:
+      - mongoCluster
+    ports:
+      - "8443:8443"
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - BOT_APP_URL=${BOT_APP_URL}
+    restart: unless-stopped
 
 networks:
   mongoCluster:
