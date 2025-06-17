@@ -45,7 +45,7 @@ services:
       - mongoCluster
     entrypoint: >
       bash -c "
-        sleep 30;  # להוסיף יותר זמן המתנה
+        sleep 30;  # Adjust sleep time if necessary
         mongosh --host mongo1:27017 --eval '
           rs.initiate({
             _id: \"myReplicaSet\",
@@ -65,7 +65,7 @@ services:
     container_name: yolo5
     platform: linux/amd64
     environment:
-      - BUCKET_NAME=liran-poly-bucket
+      - BUCKET_NAME=${BUCKET_NAME}
       - MONGO_URI=mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=myReplicaSet
       - MONGO_DB=default_db
       - MONGO_COLLECTION=predictions
@@ -78,12 +78,13 @@ services:
       - ./yolo5:/usr/src/app/yolo5
 
   polybot:
-    image: liranmil/polybot:latest
+    image: liranmil/polybotv2:latest
     container_name: polybot
     depends_on:
       - mongo1
       - mongo2
       - mongo3
+      - yolo5
     networks:
       - mongoCluster
     ports:
@@ -91,7 +92,13 @@ services:
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - BOT_APP_URL=${BOT_APP_URL}
+      - MONGO_URI=mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=myReplicaSet
+      - MONGO_DB=default_db
+      - MONGO_COLLECTION=${MONGO_COLLECTION}
+      - BUCKET_NAME=${BUCKET_NAME}
     restart: unless-stopped
+    volumes:
+      - ~/.aws:/root/.aws
 
 networks:
   mongoCluster:
