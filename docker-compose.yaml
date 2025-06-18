@@ -54,19 +54,18 @@ services:
               { _id: 1, host: \"mongo2:27017\" },
               { _id: 2, host: \"mongo3:27017\" }
             ]
-          })
-        '
+          })'
       "
 
   yolo5:
-    image: ultralytics/yolov5:latest
+    image: ${YOLO5_IMG_NAME}
     container_name: yolo5
     platform: linux/amd64
     environment:
       - BUCKET_NAME=${BUCKET_NAME}
       - MONGO_URI=mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=myReplicaSet
       - MONGO_DB=default_db
-      - MONGO_COLLECTION=predictions
+      - MONGO_COLLECTION=${MONGO_COLLECTION}
     networks:
       - mongoCluster
     ports:
@@ -75,7 +74,7 @@ services:
       - $HOME/.aws:/root/.aws
 
   polybot:
-    image: liranmil/polybotv2.1:latest
+    image: ${POLYBOT_IMG_NAME}
     container_name: polybot
     depends_on:
       - mongo1

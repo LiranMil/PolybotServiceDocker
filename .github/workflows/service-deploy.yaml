@@ -1,106 +1,86 @@
-version: '3.8'
+name: Polybot Service Deployment
 
-services:
-  mongo1:
-    image: mongo:5
-    container_name: mongo1
-    command: ["mongod", "--replSet", "myReplicaSet", "--bind_ip", "0.0.0.0"]
-    networks:
-      - mongoCluster
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo1_data:/data/db
+on:
+  push:
+    branches:
+      - main
 
-  mongo2:
-    image: mongo:5
-    container_name: mongo2
-    command: ["mongod", "--replSet", "myReplicaSet", "--bind_ip", "0.0.0.0"]
-    networks:
-      - mongoCluster
-    ports:
-      - "27018:27017"
-    volumes:
-      - mongo2_data:/data/db
+env:
+  EC2_PUBLIC_IP: 16.170.219.21
 
-  mongo3:
-    image: mongo:5
-    container_name: mongo3
-    command: ["mongod", "--replSet", "myReplicaSet", "--bind_ip", "0.0.0.0"]
-    networks:
-      - mongoCluster
-    ports:
-      - "27019:27017"
-    volumes:
-      - mongo3_data:/data/db
+jobs:
+  PolybotBuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repo code
+        uses: actions/checkout@v2
 
-  mongo-init:
-    image: mongo:5
-    container_name: mongo-init
-    depends_on:
-      - mongo1
-      - mongo2
-      - mongo3
-    networks:
-      - mongoCluster
-    entrypoint: >
-      bash -c "
-        sleep 30;
-        mongosh --host mongo1:27017 --eval '
-          rs.initiate({
-            _id: \"myReplicaSet\",
-            members: [
-              { _id: 0, host: \"mongo1:27017\" },
-              { _id: 1, host: \"mongo2:27017\" },
-              { _id: 2, host: \"mongo3:27017\" }
-            ]
-          })'
-      "
+      - name: Build and push image
+        run: |
+          cd polybot
+          docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
+          IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/polybot:${{ github.run_number }}
+          docker build -t $IMAGE_NAME .
+          docker push $IMAGE_NAME
 
-  yolo5:
-    image: ${YOLO5_IMG_NAME}
-    container_name: yolo5
-    platform: linux/amd64
-    environment:
-      - BUCKET_NAME=${BUCKET_NAME}
-      - MONGO_URI=mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=myReplicaSet
-      - MONGO_DB=default_db
-      - MONGO_COLLECTION=${MONGO_COLLECTION}
-    networks:
-      - mongoCluster
-    ports:
-      - "8081:8081"
-    volumes:
-      - $HOME/.aws:/root/.aws
+  Yolo5Build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repo code
+        uses: actions/checkout@v2
 
-  polybot:
-    image: ${POLYBOT_IMG_NAME}
-    container_name: polybot
-    depends_on:
-      - mongo1
-      - mongo2
-      - mongo3
-      - yolo5
-    networks:
-      - mongoCluster
-    ports:
-      - "8443:8443"
-    environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - BOT_APP_URL=${BOT_APP_URL}
-      - MONGO_URI=mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=myReplicaSet
-      - MONGO_DB=default_db
-      - MONGO_COLLECTION=${MONGO_COLLECTION}
-      - BUCKET_NAME=${BUCKET_NAME}
-    restart: unless-stopped
-    volumes:
-      - ~/.aws:/root/.aws
+      - name: Build and push image
+        run: |
+          cd yolo5
+          docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
+          IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/yolo5:${{ github.run_number }}
+          docker build -t $IMAGE_NAME .
+          docker push $IMAGE_NAME
 
-networks:
-  mongoCluster:
-    driver: bridge
+  Deploy:
+    name: Deploy Docker Compose project
+    runs-on: ubuntu-latest
+    needs:
+      - PolybotBuild
+      - Yolo5Build
 
-volumes:
-  mongo1_data:
-  mongo2_data:
-  mongo3_data:
+    steps:
+      - name: Checkout the repo code
+        uses: actions/checkout@v2
+
+      - name: Copy Compose files to the EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ env.EC2_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          source: .
+          target: PolybotService/
+
+      - name: Update the Docker Compose project in the EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.EC2_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            sudo apt-get update && sudo apt-get install -y jq
+
+            cd PolybotService/
+
+            echo -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" > telegram_bot_token.secret
+
+            NGROK_DOMAIN=$(curl -s localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
+
+            echo """
+            POLYBOT_IMG_NAME=${{ secrets.DOCKERHUB_USERNAME }}/polybot:${{ github.run_number }}
+            YOLO5_IMG_NAME=${{ secrets.DOCKERHUB_USERNAME }}/yolo5:${{ github.run_number }}
+            TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+            BOT_APP_URL=$NGROK_DOMAIN
+            MONGO_COLLECTION=predictions
+            BUCKET_NAME=sos-cloud-ai-detections
+            """ > .env
+
+            docker container rm -f yolo5 || true
+            docker compose down
+            docker compose up -d
