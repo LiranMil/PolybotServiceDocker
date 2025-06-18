@@ -100,7 +100,6 @@ services:
     volumes:
       - ~/.aws:/root/.aws
 
-
 networks:
   mongoCluster:
     driver: bridge
