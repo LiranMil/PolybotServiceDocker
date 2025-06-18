@@ -74,7 +74,6 @@ services:
     volumes:
       - $HOME/.aws:/root/.aws
 
-
   polybot:
     image: liranmil/polybotv2.1:latest
     container_name: polybot
