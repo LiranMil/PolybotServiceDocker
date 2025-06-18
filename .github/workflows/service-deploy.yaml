@@ -37,6 +37,7 @@ jobs:
           docker buildx build --platform linux/amd64 -t $IMAGE_NAME .
           docker push $IMAGE_NAME
 
+
   Deploy:
     name: Deploy Docker Compose project
     runs-on: ubuntu-latest
