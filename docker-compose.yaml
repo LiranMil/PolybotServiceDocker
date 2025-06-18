@@ -45,7 +45,7 @@ services:
       - mongoCluster
     entrypoint: >
       bash -c "
-        sleep 30;  # Adjust sleep time if necessary
+        sleep 30;
         mongosh --host mongo1:27017 --eval '
           rs.initiate({
             _id: \"myReplicaSet\",
@@ -75,7 +75,7 @@ services:
       - $HOME/.aws:/root/.aws
 
   polybot:
-    image: liranmil/polybot:${POLYBOT_TAG}
+    image: liranmil/polybotv2.1:latest
     container_name: polybot
     depends_on:
       - mongo1
