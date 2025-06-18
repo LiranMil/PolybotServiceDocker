@@ -78,7 +78,7 @@ services:
       - ./yolo5:/usr/src/app/yolo5
 
   polybot:
-    image: liranmil/polybotv2:latest
+    image: liranmil/polybotv2.1:latest
     container_name: polybot
     depends_on:
       - mongo1
