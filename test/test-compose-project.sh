@@ -9,7 +9,7 @@ RUNNING_CONTAINERS=$(docker ps --filter "status=running" --filter "label=com.doc
 docker ps --filter "status=running" --filter "label=com.docker.compose.project"
 
 if [ "$RUNNING_CONTAINERS" -lt "5" ]; then
-  echo "Found less then 5 running containers"
+  echo "Found less than 5 running containers"
   exit 1
 fi
 
@@ -19,11 +19,11 @@ echo -e "\n\n\n-----------------------------------------------------------------
 echo "Test Case II: There are 3 running MongoDB containers"
 echo -e "-----------------------------------------------------------------------------------------------------------------"
 
-MONGO_CONTAINER_IDS=$(docker ps --filter "status=running" --filter "label=com.docker.compose.project" --format '{{.ID}} {{.Image}}' | grep "mongo:.*" | awk '{print $1}')
+MONGO_CONTAINER_IDS=$(docker ps --format '{{.ID}} {{.Names}}' | grep -E 'mongo[1-3]$' | awk '{print $1}')
 
-docker ps --filter "status=running" --filter "label=com.docker.compose.project"
+docker ps --format '{{.ID}} {{.Names}}'
 
-if ! [ "$(echo "$MONGO_CONTAINER_IDS" | wc -l)" -eq "3" ]; then
+if [ "$(echo "$MONGO_CONTAINER_IDS" | wc -l)" -ne 3 ]; then
   echo "Three running mongo containers were not found"
   exit 1
 fi
@@ -34,11 +34,16 @@ echo -e "\n\n\n-----------------------------------------------------------------
 echo "Test Case III: Mongo cluster was initialized"
 echo -e "-----------------------------------------------------------------------------------------------------------------"
 
+if [ -z "$MONGO_CONTAINER_IDS" ]; then
+  echo "No running MongoDB containers found"
+  exit 1
+fi
+
 SOME_MONGO_CONTAINER_ID=$(echo "$MONGO_CONTAINER_IDS" | head -n 1)
 
 echo "Connecting to container $SOME_MONGO_CONTAINER_ID and check the replicaSet status:"
 
-rs_status=$(docker exec $SOME_MONGO_CONTAINER_ID mongo --eval "rs.status()")
+rs_status=$(docker exec $SOME_MONGO_CONTAINER_ID mongo --eval "rs.status()" 2>/dev/null)
 
 echo "$rs_status"
 
@@ -62,4 +67,3 @@ if [ "$response_code" -ne 200 ]; then
 fi
 
 echo -e "\n✅ The polybot service is available"
-
