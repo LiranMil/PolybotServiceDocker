@@ -15,12 +15,12 @@ jobs:
       - name: Checkout the repo code
         uses: actions/checkout@v2
 
-      - name: Build and push Polybot image
+      - name: Build and push image
         run: |
           cd polybot
           docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
-          IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/polybot:${{ github.run_number }}
-          docker build -t $IMAGE_NAME .
+          IMAGE_NAME=polybot:${{ github.run_number }}
+          docker buildx build --platform linux/amd64 -t $IMAGE_NAME .
           docker push $IMAGE_NAME
 
   Yolo5Build:
@@ -29,12 +29,12 @@ jobs:
       - name: Checkout the repo code
         uses: actions/checkout@v2
 
-      - name: Build and push YOLO5 image
+      - name: Build and push image
         run: |
           cd yolo5
           docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
-          IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/yolo5:${{ github.run_number }}
-          docker build -t $IMAGE_NAME .
+          IMAGE_NAME=yolo5:${{ github.run_number }}
+          docker buildx build --platform linux/amd64 -t $IMAGE_NAME .
           docker push $IMAGE_NAME
 
   Deploy:
@@ -48,7 +48,7 @@ jobs:
       - name: Checkout the repo code
         uses: actions/checkout@v2
 
-      - name: Copy Compose files to the EC2
+      - name: Copy project files to the EC2
         uses: appleboy/scp-action@master
         with:
           host: ${{ env.EC2_PUBLIC_IP }}
@@ -57,15 +57,13 @@ jobs:
           source: .
           target: PolybotService/
 
-      - name: Update the Docker Compose project in the EC2
+      - name: Run deployment on the EC2
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.EC2_PUBLIC_IP }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
-            # התקנת Docker + docker compose plugin
-            sudo apt-get remove -y docker docker-engine docker.io containerd runc || true
             sudo apt-get update
             sudo apt-get install -y ca-certificates curl gnupg
             sudo install -m 0755 -d /etc/apt/keyrings
@@ -76,11 +74,7 @@ jobs:
               sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
             sudo apt-get update
             sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin jq
-
             sudo systemctl start docker
-
-            docker --version
-            docker compose version
 
             cd PolybotService/
             echo -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" > telegram_bot_token.secret
@@ -88,10 +82,11 @@ jobs:
             NGROK_DOMAIN=$(curl -s localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
 
             echo """
-            POLYBOT_IMG_NAME=${{ secrets.DOCKERHUB_USERNAME }}/polybot:${{ github.run_number }}
-            YOLO5_IMG_NAME=${{ secrets.DOCKERHUB_USERNAME }}/yolo5:${{ github.run_number }}
-            TELEGRAM_APP_URL=$NGROK_DOMAIN
+            POLYBOT_IMG_NAME=polybot:${{ github.run_number }}
+            YOLO5_IMG_NAME=yolo5:${{ github.run_number }}
+            TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+            BOT_APP_URL=$NGROK_DOMAIN
             """ > .env
 
             docker compose down
-            docker compose up -d --build
+            docker compose up -d
