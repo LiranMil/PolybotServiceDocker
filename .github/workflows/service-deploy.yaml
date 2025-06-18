@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  EC2_PUBLIC_IP: 16.171.19.179
+  EC2_PUBLIC_IP: 16.170.232.89
 
 jobs:
   PolybotBuild:
@@ -18,17 +18,8 @@ jobs:
       - name: Build and push image
         run: |
           cd polybot
-          
-          # Login to ECR (commend in in case you use ECR, change region code and ECR URI):
-          # export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
-          # export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 352708296901.dkr.ecr.eu-central-1.amazonaws.com
-          
-          # Login to DockerHub (comment out if you don't use DockerHub):         
-          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | \
-            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-
-          IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/polybot:${{ github.run_number }}
+          docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
+          IMAGE_NAME=polybot:${{ github.run_number }}
           docker build -t $IMAGE_NAME .
           docker push $IMAGE_NAME
 
@@ -41,15 +32,8 @@ jobs:
       - name: Build and push image
         run: |
           cd yolo5
-          
-          # export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
-          # export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 352708296901.dkr.ecr.eu-central-1.amazonaws.com
-               
-          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | \
-            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-
-          IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/yolo5:${{ github.run_number }}
+          docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
+          IMAGE_NAME=yolo5:${{ github.run_number }}
           docker build -t $IMAGE_NAME .
           docker push $IMAGE_NAME
 
@@ -80,27 +64,34 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
-            # You deployment script here...
-            
-            sudo apt update && sudo apt install jq -y
-            
+            # התקנת Docker + docker compose plugin (v2)
+            sudo apt-get remove -y docker docker-engine docker.io containerd runc || true
+            sudo apt-get update
+            sudo apt-get install -y ca-certificates curl gnupg
+            sudo install -m 0755 -d /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+            echo \
+              "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+              https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
+              sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            sudo apt-get update
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin jq
+
+            # בדיקה
+            docker --version
+            docker compose version
+
+            # המשך דיפלוי
             cd PolybotService/
-            
-            # Save telegram bot token in a secret file, to be used in docker-compose.yaml
             echo -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" > telegram_bot_token.secret
-            
-            # Get the ngrok current domain (you should assume ngrok is already running in the EC2)
+
             NGROK_DOMAIN=$(curl -s localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
-            
-            # Generate .env file
+
             echo """
             POLYBOT_IMG_NAME=polybot:${{ github.run_number }}
             YOLO5_IMG_NAME=yolo5:${{ github.run_number }}
             TELEGRAM_APP_URL=$NGROK_DOMAIN
             """ > .env
-            
-            # Take the service down
+
             docker compose down
-            
-            # Take it up with the current updated values
             docker compose up -d
