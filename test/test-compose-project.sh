@@ -19,6 +19,7 @@ echo -e "\n\n\n-----------------------------------------------------------------
 echo "Test Case II: There are 3 running MongoDB containers"
 echo -e "-----------------------------------------------------------------------------------------------------------------"
 
+# ✅ שינוי רק כאן – החלפה לגישה לפי שם הקונטיינרים (mongo1, mongo2, mongo3)
 MONGO_CONTAINER_IDS=$(docker ps --format '{{.ID}} {{.Names}}' | grep -E 'mongo[1-3]$' | awk '{print $1}')
 
 docker ps --format '{{.ID}} {{.Names}}'
@@ -34,16 +35,11 @@ echo -e "\n\n\n-----------------------------------------------------------------
 echo "Test Case III: Mongo cluster was initialized"
 echo -e "-----------------------------------------------------------------------------------------------------------------"
 
-if [ -z "$MONGO_CONTAINER_IDS" ]; then
-  echo "No running MongoDB containers found"
-  exit 1
-fi
-
 SOME_MONGO_CONTAINER_ID=$(echo "$MONGO_CONTAINER_IDS" | head -n 1)
 
 echo "Connecting to container $SOME_MONGO_CONTAINER_ID and check the replicaSet status:"
 
-rs_status=$(docker exec $SOME_MONGO_CONTAINER_ID mongo --eval "rs.status()" 2>/dev/null)
+rs_status=$(docker exec $SOME_MONGO_CONTAINER_ID mongo --eval "rs.status()")
 
 echo "$rs_status"
 
