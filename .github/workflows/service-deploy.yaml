@@ -19,31 +19,15 @@ jobs:
         run: |
           cd polybot
           docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
-          IMAGE_NAME=polybot:${{ github.run_number }}
+          IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/polybot:${{ github.run_number }}
           docker buildx build --platform linux/amd64 -t $IMAGE_NAME .
           docker push $IMAGE_NAME
-
-  Yolo5Build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout the repo code
-        uses: actions/checkout@v2
-
-      - name: Build and push image
-        run: |
-          cd yolo5
-          docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
-          IMAGE_NAME=yolo5:${{ github.run_number }}
-          docker buildx build --platform linux/amd64 -t $IMAGE_NAME .
-          docker push $IMAGE_NAME
-
 
   Deploy:
     name: Deploy Docker Compose project
     runs-on: ubuntu-latest
     needs:
       - PolybotBuild
-      - Yolo5Build
 
     steps:
       - name: Checkout the repo code
@@ -83,10 +67,11 @@ jobs:
             NGROK_DOMAIN=$(curl -s localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
 
             echo """
-            POLYBOT_IMG_NAME=polybot:${{ github.run_number }}
-            YOLO5_IMG_NAME=yolo5:${{ github.run_number }}
+            POLYBOT_TAG=${{ github.run_number }}
             TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
             BOT_APP_URL=$NGROK_DOMAIN
+            BUCKET_NAME=${{ secrets.BUCKET_NAME }}
+            MONGO_COLLECTION=${{ secrets.MONGO_COLLECTION }}
             """ > .env
 
             docker compose down

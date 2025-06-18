@@ -59,9 +59,7 @@ services:
       "
 
   yolo5:
-    build:
-      context: ./yolo5
-      dockerfile: Dockerfile
+    image: ultralytics/yolov5:latest
     container_name: yolo5
     platform: linux/amd64
     environment:
@@ -75,10 +73,9 @@ services:
       - "8081:8081"
     volumes:
       - $HOME/.aws:/root/.aws
-      - ./yolo5:/usr/src/app/yolo5
 
   polybot:
-    image: liranmil/polybotv2.1:latest
+    image: liranmil/polybot:${POLYBOT_TAG}
     container_name: polybot
     depends_on:
       - mongo1
