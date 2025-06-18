@@ -77,11 +77,11 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin jq
 
-            # בדיקה
+            sudo systemctl start docker
+
             docker --version
             docker compose version
 
-            # המשך דיפלוי
             cd PolybotService/
             echo -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" > telegram_bot_token.secret
 
